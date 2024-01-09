@@ -5,63 +5,82 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/Zuan0x/pokedex-cli/internal/pokeapi"
 )
-func startREPL() {
-    // Hardcoded repl commands
-    commands := map[string]interface{}{
-        "help":  displayHelp,
-        "clear": clearScreen,
-		"map": mapf,
-    }
-    // Begin the repl loop
-    reader := bufio.NewScanner(os.Stdin)
-    printPrompt()
-    for reader.Scan() {
-        text := cleanInput(reader.Text())
-        if command, exists := commands[text]; exists {
-            // Call a hardcoded function
-            command.(func())()
-        } else if strings.EqualFold("exit", text) {
-            // Close the program on the exit command
-            return
-        } else {
-            // Pass the command to the parser
-            handleCmd(text)
-        }
-        printPrompt()
-    }
-    // Print an additional line if we encountered an EOF character
-    fmt.Println()
+
+type config struct {
+	pokeapiClient    pokeapi.Client
+	nextLocationsURL *string
+	prevLocationsURL *string
 }
 
+func startRepl(cfg *config) {
+	reader := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("Pokedex > ")
+		reader.Scan()
 
-// cliName is the name used in the repl prompts
-var cliName string = "pokedex "
- 
-// printPrompt displays the repl prompt at the start of each loop
-func printPrompt() {
-    fmt.Print(cliName, "> ")
-}
- 
-// printUnkown informs the user about invalid commands
-func printUnknown(text string) {
-    fmt.Println(text, ": command not found")
+		words := cleanInput(reader.Text())
+		if len(words) == 0 {
+			continue
+		}
+
+		commandName := words[0]
+
+		command, exists := getCommands()[commandName]
+		if exists {
+			err := command.callback(cfg)
+			if err != nil {
+				fmt.Println(err)
+			}
+			continue
+		} else {
+			fmt.Println("Unknown command")
+			continue
+		}
+	}
 }
 
-
-// handleInvalidCmd attempts to recover from a bad command
-func handleInvalidCmd(text string) {
-    defer printUnknown(text)
-}
- 
-// handleCmd parses the given commands
-func handleCmd(text string) {
-    handleInvalidCmd(text)
+func cleanInput(text string) []string {
+	output := strings.ToLower(text)
+	words := strings.Fields(output)
+	return words
 }
 
-// cleanInput preprocesses input to the db repl
-func cleanInput(text string) string {
-    output := strings.TrimSpace(text)
-    output = strings.ToLower(output)
-    return output
+type cliCommand struct {
+	name        string
+	description string
+	callback    func(*config) error
+}
+
+func getCommands() map[string]cliCommand {
+	return map[string]cliCommand{
+		"help": {
+			name:        "help",
+			description: "Displays a help message",
+			callback:    commandHelp,
+		},
+		"clear": {
+			name:        "clear",
+			description: "Clears the screen",
+			callback:    commandClear,
+		},
+
+		"map": {
+			name:        "map",
+			description: "Get the next page of locations",
+			callback:    commandMapf,
+		},
+		"mapb": {
+			name:        "mapb",
+			description: "Get the previous page of locations",
+			callback:    commandMapb,
+		},
+		"exit": {
+			name:        "exit",
+			description: "Exit the Pokedex",
+			callback:    commandExit,
+		},
+	}
 }
